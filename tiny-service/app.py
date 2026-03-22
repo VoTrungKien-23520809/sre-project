@@ -1,9 +1,24 @@
 from flask import Flask, jsonify, Response
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.sdk.resources import Resource
 import time
 import random
 
+# ── OpenTelemetry setup ─────────────────────────────────────────
+resource = Resource.create({"service.name": "tiny-service"})
+provider = TracerProvider(resource=resource)
+otlp_exporter = OTLPSpanExporter(endpoint="http://jaeger:4317", insecure=True)
+provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+trace.set_tracer_provider(provider)
+tracer = trace.get_tracer(__name__)
+
 app = Flask(__name__)
+FlaskInstrumentor().instrument_app(app)
 
 # ── Metrics định nghĩa ──────────────────────────────────────────
 REQUEST_COUNT = Counter(
@@ -77,12 +92,13 @@ def health():
 @app.route('/api/data')
 @track_request('/api/data')
 def get_data():
-    # Simulate latency ngẫu nhiên 10ms - 300ms
-    time.sleep(random.uniform(0.01, 0.3))
-    return jsonify({
-        'data': [1, 2, 3, 4, 5],
-        'message': 'success'
-    })
+    with tracer.start_as_current_span("process-data") as span:
+        time.sleep(random.uniform(0.01, 0.3))
+        span.set_attribute("data.count", 5)  # gắn metadata vào span
+        return jsonify({
+            'data': [1, 2, 3, 4, 5],
+            'message': 'success'
+        })
 
 @app.route('/api/slow')
 @track_request('/api/slow')
