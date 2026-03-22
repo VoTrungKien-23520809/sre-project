@@ -1,0 +1,27 @@
+groups:
+  - name: tiny-service-alerts
+    rules:
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status_code="500"}[5m]))
+          /
+          sum(rate(http_requests_total[5m])) > 0.2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate cao bất thường"
+          description: "Error rate đang ở {{ $value | humanizePercentage }} — vượt ngưỡng 20%"
+
+      - alert: HighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)
+          ) > 1.0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latency P99 quá cao"
+          description: "Endpoint {{ $labels.endpoint }} có P99 latency {{ $value }}s — vượt ngưỡng 1s"
