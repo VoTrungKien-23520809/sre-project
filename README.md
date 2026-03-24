@@ -160,20 +160,31 @@ Các bước cần làm:
 ### Người 3 — SRE & Chaos Engineering
 
 Stack đã có sẵn alert rules và SLO definition. Nhiệm vụ là:
-1. Cấu hình AlertManager gửi thông báo về Telegram (xem hướng dẫn bên dưới)
+1. Cấu hình AlertManager gửi thông báo về Discord khi alert firing
 2. Viết chaos script kill pod và CPU stress
 3. Ghi nhận kết quả từ Grafana + Jaeger khi chaos xảy ra
 
-Cấu hình AlertManager Telegram:
+Cấu hình AlertManager Discord:
 ```yaml
 # alertmanager.yml
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: discord
+
 receivers:
-  - name: telegram
-    telegram_configs:
-      - bot_token: '<BOT_TOKEN>'
-        chat_id: <CHAT_ID>
-        message: '{{ .CommonAnnotations.summary }}'
+  - name: discord
+    discord_configs:
+      - webhook_url: '<DISCORD_WEBHOOK_URL>'
+        title: '{{ .CommonAnnotations.summary }}'
+        message: '{{ .CommonAnnotations.description }}'
 ```
+
+Cách lấy Discord Webhook URL:
+1. Vào Discord channel muốn nhận alert
+2. Settings → Integrations → Webhooks → New Webhook
+3. Copy Webhook URL dán vào config trên
 
 ### Người 4 — Phục hồi & Tự động hóa
 
