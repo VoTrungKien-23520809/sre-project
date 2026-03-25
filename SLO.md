@@ -49,7 +49,7 @@ histogram_quantile(0.99,
 ## Error Budget
 
 Với SLO Availability 99.5% trong 30 ngày:
-- Tổng thời gian: 30 × 24 × 60 = 43,200 phút
+- Tổng thời gian: 30 × 24 × 60 = 43 ,200 phút
 - **Error budget = 0.5% × 43,200 = 216 phút** (~3.6 giờ được phép downtime/tháng)
 
 ---
