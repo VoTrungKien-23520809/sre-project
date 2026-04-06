@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/alert.rules.yml
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'tiny-service'
+        static_configs:
+          - targets: ['tiny-service:5000']
+        metrics_path: '/metrics'
+
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['monitoring']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+            target_label: __address__
+            regex: (.+)
+            replacement: $1
+
+  alert.rules.yml: |
+    groups:
+      - name: tiny-service-alerts
+        rules:
+          - alert: HighErrorRate
+            expr: |
+              sum(rate(http_requests_total{status_code="500"}[5m]))
+              /
+              sum(rate(http_requests_total[5m])) > 0.2
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Error rate cao bất thường"
+              description: "Error rate {{ $value | humanizePercentage }} vượt ngưỡng 20%"
+
+          - alert: HighLatencyP99
+            expr: |
+              histogram_quantile(0.99,
+                sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)
+              ) > 1.0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Latency P99 quá cao"
+              description: "Endpoint {{ $labels.endpoint }} P99={{ $value }}s vượt ngưỡng 1s"
