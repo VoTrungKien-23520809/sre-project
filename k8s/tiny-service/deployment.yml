@@ -24,25 +24,25 @@ spec:
         image: kienvo2110/tiny-service:v1
         ports:
         - containerPort: 5000
-      env:
-      - name: JAEGER_ENDPOINT
-        value: "https://jeager:4317"
-      resources:
-        limits:
-          cpu: "200m"
-          memory: "128Mi"
-        requests:
-          cpu: "100m"
-          memory: "64Mi"
-      livenessProbe:
-        httpGet:
-          path: /healthz
-          port: 5000
-        initialDelaySeconds: 10
-        periodSeconds: 15
-      readinessProbe:
-        httpGet:
-          path: /healthz
-          port: 5000
-        initialDelaySeconds: 5
-        periodSeconds: 10
+        env:
+        - name: JAEGER_ENDPOINT
+          value: "https://jaeger:4317"
+        resources:
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
