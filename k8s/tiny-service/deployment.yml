@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tiny-service
+  namespace: monitoring
+  labels:
+    app: tiny-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tiny-service
+  template:
+    metadata:
+      labels:
+        app: tiny-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: tiny-service
+        image: kienvo2110/tiny-service:v1
+        ports:
+        - containerPort: 5000
+      env:
+      - name: JAEGER_ENDPOINT
+        value: "https://jeager:4317"
+      resources:
+        limits:
+          cpu: "200m"
+          memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "64Mi"
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 5000
+        initialDelaySeconds: 10
+        periodSeconds: 15
+      readinessProbe:
+        httpGet:
+          path: /healthz
+          port: 5000
+        initialDelaySeconds: 5
+        periodSeconds: 10
