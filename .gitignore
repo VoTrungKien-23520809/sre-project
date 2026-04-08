@@ -5,3 +5,9 @@
 *.log
 
 alertmanager/secrets/
+
+
+# Chaos runtime artifacts
+chaos/runs/
+chaos/.latest_run
+chaos/.cpu_stress.pids
