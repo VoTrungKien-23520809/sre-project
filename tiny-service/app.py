@@ -1,4 +1,10 @@
-from flask import Flask, jsonify, Response
+from flask import Flask, jsonify, Response, make_response 
+# Quang comment
+# Bổ sung make_response để chuẩn hóa mọi kiểu giá trị trả về của Flask
+# thành object Response. Lý do: trước đó một số endpoint trả về tuple
+# như (jsonify(...), 500), nhưng decorator lại kiểm tra status_code trực tiếp
+# trên result. Với tuple thì không có thuộc tính status_code, làm metric ghi sai mã phản hồi.
+# End of quang comment
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -54,9 +60,20 @@ def track_request(endpoint):
             start = time.time()
             status = 200
             try:
+                #Quang comment
+                # Chuẩn hóa kết quả trả về từ view function thành Flask Response.
+                # Lỗi cũ:
+                # - Một số route như /api/error trả về dạng (jsonify(...), 500)
+                # - Decorator cũ dùng hasattr(result, 'status_code')
+                # - Với tuple, điều kiện này không đúng nên status vẫn giữ mặc định là 200
+                # Hậu quả:
+                # - Request lỗi 500 có thể bị ghi nhận nhầm thành 200
+                # - Làm sai metric http_requests_total
+                # - Kéo theo SLI/SLO và alert error rate bị sai
+                #End of quang comment
                 result = f(*args, **kwargs)
-                if hasattr(result, 'status_code'):
-                    status = result.status_code
+                response = make_response(result)
+                status = response.status_code
                 return result
             except Exception as e:
                 status = 500
@@ -110,11 +127,19 @@ def slow_endpoint():
 @app.route('/api/error')
 @track_request('/api/error')
 def error_endpoint():
-    # Simulate lỗi 50% để test error rate SLI
+    #Quang comment
+    # Mô phỏng lỗi 50% để test error rate SLI.
+    # Không tự tăng REQUEST_COUNT ở đây nữa vì decorator track_request()
+    # đã chịu trách nhiệm ghi nhận metric sau mỗi request.
+    # Lỗi cũ:
+    # - Route này từng inc() thủ công cho status 500
+    # - Sau đó decorator lại inc() thêm một lần nữa ở finally
+    # Hậu quả:
+    # - Một request lỗi có thể bị đếm 2 lần
+    # - Thậm chí vừa có bản ghi 500 vừa có bản ghi 200 nếu status bị đọc sai
+    # - Làm sai số liệu success rate / error rate trong Prometheus
+    #End of quang comment
     if random.random() < 0.5:
-        REQUEST_COUNT.labels(
-            method='GET', endpoint='/api/error', status_code='500'
-        ).inc()
         return jsonify({'error': 'Internal Server Error'}), 500
     return jsonify({'message': 'ok'})
 

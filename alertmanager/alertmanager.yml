@@ -1,0 +1,24 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: discord
+  group_by: ['alertname', 'job', 'instance']
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
+
+receivers:
+  - name: discord
+    discord_configs:
+      - send_resolved: true
+        webhook_url_file: /etc/alertmanager/secrets/discord_webhook_url
+        username: "SRE Bot"
+        title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        content: '🚨 Prometheus Alert'
+        message: |
+          **Severity:** {{ .CommonLabels.severity }}
+          **Job:** {{ .CommonLabels.job }}
+          **Instance:** {{ .CommonLabels.instance }}
+          **Summary:** {{ .CommonAnnotations.summary }}
+          **Description:** {{ .CommonAnnotations.description }}
