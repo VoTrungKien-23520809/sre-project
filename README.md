@@ -2,15 +2,15 @@
 
 ## Tổng quan
 
-Hệ thống giám sát toàn diện cho một Web Service mẫu, triển khai trên AWS EKS với đầy đủ 3 pillars of Observability: Metrics, Logs, Traces.
+Hệ thống giám sát toàn diện cho một Web Service mẫu, triển khai trên Azure AKS với đầy đủ 3 pillars of Observability: Metrics, Logs, Traces.
 
 ## Thành viên & Phân công
 
 | Role | Nhiệm vụ | Trạng thái |
 |---|---|---|
-| Người 1 | Hạ tầng & EKS — deploy lên AWS | 🔲 Chưa làm |
+| Người 1 | Hạ tầng & AKS — deploy lên Azure | ✅ Hoàn thành |
 | Người 2 | Observability Stack — Prometheus, Grafana, Loki, Jaeger | ✅ Hoàn thành |
-| Người 3 | SRE & Chaos Engineering — SLI/SLO, AlertManager, Chaos Test | 🔲 Chưa làm |
+| Người 3 | SRE & Chaos Engineering — SLI/SLO, AlertManager, Chaos Test | ✅ Hoàn thành |
 | Người 4 | Phục hồi & Tự động hóa — Ansible, Runbook, Postmortem | 🔲 Chưa làm |
 
 ---
@@ -18,7 +18,7 @@ Hệ thống giám sát toàn diện cho một Web Service mẫu, triển khai t
 ## Kiến trúc hệ thống
 ```
 ┌─────────────────────────────────────────────┐
-│              AWS EKS Cluster                │
+│              Azure AKS Cluster              │
 │                                             │
 │  ┌─────────────┐    ┌──────────────────┐   │
 │  │ Tiny Service│───▶│   Prometheus     │   │
@@ -148,12 +148,12 @@ Kiểm tra alerts tại: http://localhost:9090/alerts
 
 ## Hướng dẫn cho từng thành viên
 
-### Người 1 — Hạ tầng & EKS
+### Người 1 — Hạ tầng & AKS
 
-Clone repo về, đọc `docker-compose.yml` để hiểu cấu trúc service. Nhiệm vụ là deploy stack này lên AWS EKS thay vì chạy local bằng Docker Compose. Xem thêm tài liệu: https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html
+Clone repo về, đọc `docker-compose.yml` để hiểu cấu trúc service. Nhiệm vụ là deploy stack này lên Azure AKS thay vì chạy local bằng Docker Compose. Xem thêm tài liệu: https://learn.microsoft.com/en-us/azure/aks/
 
 Các bước cần làm:
-1. Tạo EKS cluster bằng `eksctl`
+1. Tạo AKS cluster bằng Azure CLI (`az aks create`) hoặc Terraform
 2. Chuyển đổi `docker-compose.yml` sang Kubernetes manifests (Deployment, Service, ConfigMap)
 3. Cấu hình Ingress để truy cập từ ngoài
 
