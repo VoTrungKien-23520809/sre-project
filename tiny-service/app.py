@@ -8,11 +8,15 @@ from opentelemetry.instrumentation.flask import FlaskInstrumentor
 from opentelemetry.sdk.resources import Resource
 import time
 import random
+import os
 
 # ── OpenTelemetry setup ─────────────────────────────────────────
 resource = Resource.create({"service.name": "tiny-service"})
 provider = TracerProvider(resource=resource)
-otlp_exporter = OTLPSpanExporter(endpoint="http://jaeger:4317", insecure=True)
+
+jaeger_endpoint = os.environ.get('JAEGER_ENDPOINT', 'http://jaeger:4317')
+otlp_exporter = OTLPSpanExporter(endpoint=jaeger_endpoint, insecure=True)
+
 provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 trace.set_tracer_provider(provider)
 tracer = trace.get_tracer(__name__)
@@ -112,9 +116,6 @@ def slow_endpoint():
 def error_endpoint():
     # Simulate lỗi 50% để test error rate SLI
     if random.random() < 0.5:
-        REQUEST_COUNT.labels(
-            method='GET', endpoint='/api/error', status_code='500'
-        ).inc()
         return jsonify({'error': 'Internal Server Error'}), 500
     return jsonify({'message': 'ok'})
 
