@@ -26,7 +26,7 @@ spec:
         - containerPort: 5000
         env:
         - name: JAEGER_ENDPOINT
-          value: "https://jaeger:4317"
+          value: "http://jaeger:4317"
         resources:
           limits:
             cpu: "200m"
