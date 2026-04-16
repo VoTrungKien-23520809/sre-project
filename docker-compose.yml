@@ -1,18 +1,30 @@
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     container_name: prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml  # thêm dòng này
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.enable-lifecycle'
+      - '--log.level=info'
     restart: unless-stopped
-
+  alertmanager:
+    image: prom/alertmanager:v0.31.1
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/secrets/discord_webhook_url:/etc/alertmanager/secrets/discord_webhook_url:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--log.level=info'
+    restart: unless-stopped
   grafana:
     image: grafana/grafana:latest
     container_name: grafana

@@ -1,13 +1,27 @@
 groups:
-  - name: tiny-service-alerts
+  - name: tiny-service-availability
     rules:
+      - alert: TinyServiceDown
+        expr: up{job="tiny-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tiny service bị down"
+          description: "Prometheus không scrape được tiny-service trong ít nhất 30 giây"
 
+  - name: tiny-service-sli
+    rules:
       - alert: HighErrorRate
         expr: |
-          sum(rate(http_requests_total{status_code="500"}[5m]))
-          /
-          sum(rate(http_requests_total[5m])) > 0.2
-        for: 1m
+          (
+            sum(rate(http_requests_total{job="tiny-service", status_code="500"}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total{job="tiny-service"}[5m])), 0.001)
+          ) > 0.2
+          and
+          sum(rate(http_requests_total{job="tiny-service"}[5m])) > 0.1
+        for: 2m
         labels:
           severity: critical
         annotations:
@@ -16,12 +30,15 @@ groups:
 
       - alert: HighLatencyP99
         expr: |
-          histogram_quantile(0.99,
-            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)
-          ) > 1.0
-        for: 1m
+          histogram_quantile(
+            0.99,
+            sum by (le, endpoint) (
+              rate(http_request_duration_seconds_bucket{job="tiny-service"}[5m])
+            )
+          ) > 1
+        for: 2m
         labels:
           severity: warning
         annotations:
-          summary: "Latency P99 quá cao"
+          summary: "Latency P99 too high"
           description: "Endpoint {{ $labels.endpoint }} có P99 latency {{ $value }}s — vượt ngưỡng 1s"
