@@ -1,0 +1,186 @@
+---
+# =============================================================
+# Ansible Playbook: SRE Auto-Recovery for Tiny Service
+# Mô tả: Tự động restart container khi nhận alert từ Prometheus
+# Trigger: HighErrorRate (Critical) hoặc HighLatencyP99 (Warning)
+# Author: Người 4 — NT533.Q22 2026
+# =============================================================
+
+- name: "[RECOVERY] Check & Restart Tiny Service"
+  hosts: docker_host
+  become: true
+  gather_facts: true
+
+  vars:
+    service_name: "tiny-service"
+    compose_dir: "/home/sangnn1908/SRE/sre-project"
+    prometheus_url: "http://localhost:9090"
+    error_rate_threshold: 0.20       # 20% — ngưỡng HighErrorRate
+    latency_p99_threshold: 1.0       # 1s  — ngưỡng HighLatencyP99
+    max_restart_attempts: 3
+    health_check_url: "http://localhost:5000/health"
+    log_file: "/var/log/sre-recovery.log"
+
+  tasks:
+
+    # ----------------------------------------------------------
+    # BƯỚC 1: Ghi log bắt đầu recovery
+    # ----------------------------------------------------------
+    - name: "Log — Bắt đầu recovery procedure"
+      shell: |
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [START] Recovery triggered for {{ service_name }}" >> {{ log_file }}
+      ignore_errors: true
+
+    # ----------------------------------------------------------
+    # BƯỚC 2: Kiểm tra container hiện tại
+    # ----------------------------------------------------------
+    - name: "Check — Lấy trạng thái container {{ service_name }}"
+      shell: docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' {{ service_name }}
+      register: container_status
+      ignore_errors: true
+
+    - name: "Log — Trạng thái container"
+      shell: |
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] Container status: {{ container_status.stdout }}" >> {{ log_file }}
+      ignore_errors: true
+
+    - name: "Display — Trạng thái container"
+      debug:
+        msg: "Container {{ service_name }} hiện tại: {{ container_status.stdout | default('không tìm thấy') }}"
+
+    # ----------------------------------------------------------
+    # BƯỚC 3: Thu thập metrics trước khi restart (để postmortem)
+    # ----------------------------------------------------------
+    - name: "Collect — Error rate hiện tại từ Prometheus"
+      uri:
+        url: "{{ prometheus_url }}/api/v1/query"
+        method: GET
+        body_format: form-urlencoded
+        body:
+          query: >-
+            sum(rate(http_requests_total{status=~"5.."}[1m]))
+            / sum(rate(http_requests_total[1m]))
+      register: error_rate_result
+      ignore_errors: true
+
+    - name: "Collect — P99 Latency hiện tại từ Prometheus"
+      uri:
+        url: "{{ prometheus_url }}/api/v1/query"
+        method: GET
+        body_format: form-urlencoded
+        body:
+          query: "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[1m]))"
+      register: latency_result
+      ignore_errors: true
+
+    - name: "Log — Metrics trước khi restart"
+      shell: |
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [METRICS] ErrorRate={{ error_rate_result.json.data.result[0].value[1] | default('N/A') }} P99={{ latency_result.json.data.result[0].value[1] | default('N/A') }}s" >> {{ log_file }}
+      ignore_errors: true
+
+    # ----------------------------------------------------------
+    # BƯỚC 4: Restart service bằng docker compose
+    # ----------------------------------------------------------
+    - name: "Action — Restart {{ service_name }} via docker compose"
+      shell: |
+        cd {{ compose_dir }}
+        docker compose restart {{ service_name }}
+      register: restart_result
+      retries: "{{ max_restart_attempts }}"
+      delay: 10
+
+    - name: "Log — Kết quả restart"
+      shell: |
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ACTION] Restart result: {{ restart_result.rc }}" >> {{ log_file }}
+      ignore_errors: true
+
+    # ----------------------------------------------------------
+    # BƯỚC 5: Chờ service healthy trở lại
+    # ----------------------------------------------------------
+    - name: "Wait — Chờ {{ service_name }} health check pass"
+      uri:
+        url: "{{ health_check_url }}"
+        method: GET
+        status_code: 200
+      register: health_result
+      retries: 10
+      delay: 5
+      until: health_result.status == 200
+
+    - name: "Display — Service đã recovered"
+      debug:
+        msg: "✅ {{ service_name }} đã healthy trở lại sau restart"
+
+    # ----------------------------------------------------------
+    # BƯỚC 6: Xác nhận metrics sau restart
+    # ----------------------------------------------------------
+    - name: "Verify — Error rate sau restart"
+      uri:
+        url: "{{ prometheus_url }}/api/v1/query"
+        method: GET
+        body_format: form-urlencoded
+        body:
+          query: >-
+            sum(rate(http_requests_total{status=~"5.."}[1m]))
+            / sum(rate(http_requests_total[1m]))
+      register: error_rate_after
+      ignore_errors: true
+
+    - name: "Log — Metrics sau restart"
+      shell: |
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [VERIFY] Post-restart ErrorRate={{ error_rate_after.json.data.result[0].value[1] | default('N/A') }}" >> {{ log_file }}
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [END] Recovery completed for {{ service_name }}" >> {{ log_file }}
+      ignore_errors: true
+
+    - name: "Summary — Recovery hoàn tất"
+      debug:
+        msg: |
+          =========================================
+          ✅ RECOVERY HOÀN TẤT
+          Service   : {{ service_name }}
+          Thời điểm : {{ ansible_date_time.iso8601 }}
+          Log file  : {{ log_file }}
+          =========================================
+
+
+# =============================================================
+# Play 2: Kiểm tra toàn bộ stack (chạy độc lập để verify)
+# =============================================================
+- name: "[VERIFY] Kiểm tra toàn bộ Observability Stack"
+  hosts: docker_host
+  become: true
+  gather_facts: false
+
+  vars:
+    compose_dir: "/home/sangnn1908/SRE/sre-project"
+    services:
+      - { name: "tiny-service",  port: 5000,  path: "/health" }
+      - { name: "prometheus",    port: 9090,  path: "/-/healthy" }
+      - { name: "grafana",       port: 3000,  path: "/api/health" }
+      - { name: "loki",          port: 3100,  path: "/ready" }
+
+  tasks:
+
+    - name: "Check — Trạng thái tất cả container"
+      shell: |
+        cd {{ compose_dir }}
+        docker compose ps --format "table {{.Name}}\t{{.Status}}"
+      register: stack_status
+
+    - name: "Display — Stack status"
+      debug:
+        msg: "{{ stack_status.stdout_lines }}"
+
+    - name: "Check — Health endpoint từng service"
+      uri:
+        url: "http://localhost:{{ item.port }}{{ item.path }}"
+        method: GET
+        status_code: [200, 204]
+      loop: "{{ services }}"
+      register: health_checks
+      ignore_errors: true
+
+    - name: "Display — Kết quả health check"
+      debug:
+        msg: "{{ item.item.name }}: {{ '✅ OK' if item.status in [200, 204] else '❌ FAIL' }}"
+      loop: "{{ health_checks.results }}"

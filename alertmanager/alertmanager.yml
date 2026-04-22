@@ -8,6 +8,19 @@ route:
   group_interval: 30s
   repeat_interval: 1h
 
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: discord-and-ansible
+      group_wait: 5s
+      repeat_interval: 30m
+
+    - matchers:
+        - severity="warning"
+      receiver: discord
+      group_wait: 30s
+      repeat_interval: 1h
+
 receivers:
   - name: discord
     discord_configs:
@@ -22,3 +35,22 @@ receivers:
           **Instance:** {{ .CommonLabels.instance }}
           **Summary:** {{ .CommonAnnotations.summary }}
           **Description:** {{ .CommonAnnotations.description }}
+
+  - name: discord-and-ansible
+    discord_configs:
+      - send_resolved: true
+        webhook_url_file: /etc/alertmanager/secrets/discord_webhook_url
+        username: "SRE Bot"
+        title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        content: '🚨 Prometheus Alert — 🤖 Auto Recovery đang chạy...'
+        message: |
+          **Severity:** {{ .CommonLabels.severity }}
+          **Job:** {{ .CommonLabels.job }}
+          **Instance:** {{ .CommonLabels.instance }}
+          **Summary:** {{ .CommonAnnotations.summary }}
+          **Description:** {{ .CommonAnnotations.description }}
+          ---
+          🤖 **Ansible Playbook đã được trigger tự động**
+    webhook_configs:
+      - url: 'http://host.docker.internal:5001/webhook'
+        send_resolved: false
