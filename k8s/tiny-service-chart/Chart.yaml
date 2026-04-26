@@ -1,6 +1,0 @@
-apiVersion: v2
-name: tiny-service-chart
-description: Một Helm Chart tối giản cho Tiny-service (SRE Project)
-type: application
-version: 1.0.0
-appVersion: "1.0"
